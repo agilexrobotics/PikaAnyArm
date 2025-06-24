@@ -77,6 +77,9 @@ class RosOperator:
         self.refresh_localization_pose = True
         self.refresh_arm_end_pose = True
 
+        self.thread = None
+        self.stop_thread = False
+
         self.status_srv = None
         self.status = False
         self.init_ros()
@@ -103,8 +106,8 @@ class RosOperator:
             pose_msg.pose.orientation.w = 0  # q[3]
             self.arm_end_pose_ctrl_publisher.publish(pose_msg)
             status_msg = TeleopStatus()
-            status_msg.teleop = True
-            status_msg.wait = False
+            status_msg.quit = False
+            status_msg.fail = False
             self.teleop_status_publisher.publish(status_msg)
 
     def arm_end_pose_callback(self, msg):
@@ -114,29 +117,50 @@ class RosOperator:
             self.refresh_arm_end_pose = False
             self.arm_end_pose_matrix = matrix
 
-    def teleop_piper_status_callback(self, req):
-        if req.data:
-            self.refresh_localization_pose = True
-            self.refresh_arm_end_pose = True
-            rate = rospy.Rate(10)
-            print_flag = True
-            while not rospy.is_shutdown():
-                if not self.refresh_localization_pose and not self.refresh_arm_end_pose:
-                    print("start")
-                    break
+    def status_changing(self):
+        self.refresh_localization_pose = True
+        self.refresh_arm_end_pose = True
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            if self.stop_thread:
+                self.status = False
+                self.refresh_localization_pose = False
+                self.refresh_arm_end_pose = False
+                break
+            if not self.refresh_localization_pose and not self.refresh_arm_end_pose:
+                print("start")
+                self.status = True
+                break
+            else:
                 status_msg = TeleopStatus()
-                status_msg.teleop = False
-                status_msg.wait = True
+                status_msg.quit = False
+                status_msg.fail = True
+                print("wait")
                 self.teleop_status_publisher.publish(status_msg)
-                if print_flag:
-                    print_flag = False
-                    print("wait msg")
-                rate.sleep()
-            self.status = True
-        else:
+            rate.sleep()
+
+    def teleop_piper_status_callback(self, req):
+        if self.status:
             self.status = False
+            status_msg = TeleopStatus()
+            status_msg.quit = True
+            status_msg.fail = False
+            self.teleop_status_publisher.publish(status_msg)
             print("close")
-        return SetBoolResponse()
+        else:
+            if self.thread is None or not self.thread.is_alive():
+                self.thread = threading.Thread(target=self.status_changing)
+                self.thread.start()
+            else:
+                self.stop_thread = True
+                self.thread.join()
+                self.status = False
+                status_msg = TeleopStatus()
+                status_msg.quit = True
+                status_msg.fail = False
+                self.teleop_status_publisher.publish(status_msg)
+                print("close")
+        return TriggerResponse()
 
     def init_ros(self):
         rospy.init_node(f'teleop_piper_publisher{self.args.index_name}', anonymous=True)
@@ -145,7 +169,7 @@ class RosOperator:
         self.arm_end_pose_subscriber = rospy.Subscriber(f'/piper_FK{self.args.index_name}/urdf_end_pose_orient', PoseStamped, self.arm_end_pose_callback, queue_size=1)
         self.arm_end_pose_ctrl_publisher = rospy.Publisher(f'/piper_IK{self.args.index_name}/ctrl_end_pose', PoseStamped, queue_size=1)
         self.teleop_status_publisher = rospy.Publisher(f'/teleop_status{self.args.index_name}', TeleopStatus, queue_size=1)
-        self.status_srv = rospy.Service(f'/teleop_piper_status{self.args.index_name}', SetBool, self.teleop_piper_status_callback)
+        self.status_srv = rospy.Service(f'/teleop_piper_status{self.args.index_name}', Trigger, self.teleop_piper_status_callback)
 
 
 def get_arguments():
