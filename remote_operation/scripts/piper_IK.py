@@ -17,6 +17,7 @@ from geometry_msgs.msg import PoseStamped
 import argparse
 import time
 from data_msgs.msg import ArmControlStatus
+import threading
 
 # 获取当前脚本所在的目录路径，并将其存储在变量 ROOT_DIR 中
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -78,6 +79,11 @@ class RosOperator:
         self.lift_publisher = None
         self.last_ctrl_arm_joint_state = None
         self.arm_joint_state = None
+        self.publish_lock = threading.Lock()
+        self.publish_thread = None
+        self.sol_q = None
+        self.msg = None
+        self.xyzrpy = None
         self.init_ros()
         self.arm_ik = Arm_IK(args)
 
@@ -112,40 +118,16 @@ class RosOperator:
 
     def arm_joint_state_callback(self, msg):
         self.arm_joint_state = np.array(msg.position[:6])
-
-    def arm_end_pose_callback(self, msg):
-        if self.last_ctrl_arm_joint_state is None and self.arm_joint_state is None:
-            print("check joint_state topic")
-            return
-        # print(msg.pose.position.x, msg.pose.position.y, msg.pose.position.z)
-        if self.args.use_orient:
-            target = pin.SE3(
-                pin.Quaternion(msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z),
-                np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]),
-            )
-        else:
-            q = quaternion_from_euler(msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z)
-            target = pin.SE3(
-                pin.Quaternion(q[3], q[0], q[1], q[2]),
-                np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]),
-            )
-        sol_q, tau_ff, get_result = self.arm_ik.ik_fun(target.homogeneous, msg.pose.orientation.w)
-        if get_result:
-            xyzrpy = self.arm_ik.get_pose(sol_q[:6+(1 if self.args.lift else 0)])
-            diffX = abs(xyzrpy[0] - msg.pose.position.x)
-            diffY = abs(xyzrpy[1] - msg.pose.position.y)
-            diffZ = abs(xyzrpy[2] - msg.pose.position.z)
-            diffRoll = abs(xyzrpy[3] - msg.pose.orientation.x)
-            diffPitch = abs(xyzrpy[4] - msg.pose.orientation.y)
-            diffYaw = abs(xyzrpy[5] - msg.pose.orientation.z)
-            # print("diff:", diffX, diffY, diffZ, diffRoll, diffPitch, diffYaw)
-            if diffX > 0.3 or diffY > 0.3 or diffZ > 0.3 or diffRoll > 1 or diffPitch > 1 or diffYaw > 1:
-                get_result = False
-        # print("result:", sol_q, tau_ff)
-        if get_result:
-            status_msg = ArmControlStatus()
-            status_msg.over_limit = False
-            self.arm_control_status_publisher.publish(status_msg)
+    
+    def publishing(self):
+        rate = rospy.Rate(50)
+        while not rospy.is_shutdown():
+            self.publish_lock.acquire() 
+            msg, sol_q, xyzrpy = self.msg, self.sol_q, self.xyzrpy
+            self.publish_lock.release() 
+            if msg is None or sol_q is None or xyzrpy is None:
+                rate.sleep()
+                continue
             count = 0
             if self.args.lift:
                 joint_position = []
@@ -222,6 +204,44 @@ class RosOperator:
                 end_pose_msg.pose.orientation.z = z
                 end_pose_msg.pose.orientation.w = w
                 self.arm_receive_end_pose_publisher.publish(end_pose_msg)
+            rate.sleep()
+
+    def arm_end_pose_callback(self, msg):
+        if self.last_ctrl_arm_joint_state is None and self.arm_joint_state is None:
+            print("check joint_state topic")
+            return
+        # print(msg.pose.position.x, msg.pose.position.y, msg.pose.position.z)
+        if self.args.use_orient:
+            target = pin.SE3(
+                pin.Quaternion(msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z),
+                np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]),
+            )
+        else:
+            q = quaternion_from_euler(msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z)
+            target = pin.SE3(
+                pin.Quaternion(q[3], q[0], q[1], q[2]),
+                np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]),
+            )
+        sol_q, tau_ff, get_result = self.arm_ik.ik_fun(target.homogeneous, msg.pose.orientation.w)
+        if get_result:
+            xyzrpy = self.arm_ik.get_pose(sol_q[:6+(1 if self.args.lift else 0)])
+            diffX = abs(xyzrpy[0] - msg.pose.position.x)
+            diffY = abs(xyzrpy[1] - msg.pose.position.y)
+            diffZ = abs(xyzrpy[2] - msg.pose.position.z)
+            diffRoll = abs(xyzrpy[3] - msg.pose.orientation.x)
+            diffPitch = abs(xyzrpy[4] - msg.pose.orientation.y)
+            diffYaw = abs(xyzrpy[5] - msg.pose.orientation.z)
+            # print("diff:", diffX, diffY, diffZ, diffRoll, diffPitch, diffYaw)
+            if diffX > 0.3 or diffY > 0.3 or diffZ > 0.3 or diffRoll > 1 or diffPitch > 1 or diffYaw > 1:
+                get_result = False
+        # print("result:", sol_q, tau_ff)
+        if get_result:
+            status_msg = ArmControlStatus()
+            status_msg.over_limit = False
+            self.arm_control_status_publisher.publish(status_msg)
+            self.publish_lock.acquire()
+            self.msg, self.sol_q, self.xyzrpy = msg, sol_q, xyzrpy
+            self.publish_lock.release()
         else:
             status_msg = ArmControlStatus()
             status_msg.over_limit = True
@@ -241,6 +261,8 @@ class RosOperator:
             self.arm_receive_end_pose_publisher = rospy.Publisher(f'/piper_IK{self.args.index_name}/receive_end_pose_orient', PoseStamped, queue_size=1)
         if self.args.lift:
             self.lift_publisher = rospy.Publisher(f'/joint_states_lift', JointState, queue_size=1)
+        self.publish_thread = threading.Thread(target=self.publishing)
+        self.publish_thread.start()
 
 
 def get_arguments():
@@ -342,3 +364,4 @@ if __name__ == "__main__":
 #
 #         if cv2.waitKey(1) == ord('q'):
 #             break
+
