@@ -1,0 +1,16 @@
+<launch>
+
+    <node pkg="sensor_tools" name="serial_gripper_imu" type="serial_gripper_imu" output="screen" respawn="true" >
+        <param name="ctrl_mode" value="teleop"/>
+    </node>
+
+    <include file="$(find pika_locator)/launch/pika_single_locator.launch"/>
+
+    <node name="teleop_ur7e" pkg="remote_operation" type="teleop_ur.py" output="screen" >
+        <rosparam command="load" file="$(find remote_operation)/config/ur12e_params.yaml" />
+    </node>
+    
+
+</launch>
+
+

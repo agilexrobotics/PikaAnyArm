@@ -1,0 +1,9 @@
+<launch>
+
+    <node name="teleop_ur7e" pkg="remote_operation" type="teleop_ur.py" output="screen" >
+        <rosparam command="load" file="$(find remote_operation)/config/ur12e_params.yaml" />
+    </node>
+    
+</launch>
+
+

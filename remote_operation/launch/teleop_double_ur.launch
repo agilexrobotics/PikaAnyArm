@@ -1,0 +1,15 @@
+<launch>
+
+    <node name="teleop_ur7e" pkg="remote_operation" type="teleop_ur.py" output="screen" >
+        <param name="index_name" value="_l"/>
+        <rosparam command="load" file="$(find remote_operation)/config/ur7e_params.yaml" />
+    </node>
+
+    <node name="teleop_ur12e" pkg="remote_operation" type="teleop_ur.py" output="screen" >
+        <param name="index_name" value="_r"/>
+        <rosparam command="load" file="$(find remote_operation)/config/ur12e_params.yaml" />
+    </node>
+    
+</launch>
+
+

@@ -73,3 +73,99 @@ class  MATHTOOLS:
         T[:3, 3] = [x, y, z]
         
         return T
+
+    def rpy_to_rotvec(self,roll: float, pitch: float, yaw: float) -> np.ndarray:
+        """
+        将RPY角度(绕X/Y/Z轴旋转)转换为旋转矢量
+        
+        参数:
+            roll: 绕X轴的旋转角度(弧度)
+            pitch: 绕Y轴的旋转角度(弧度)
+            yaw: 绕Z轴的旋转角度(弧度)
+        
+        返回:
+            旋转矢量 [rx, ry, rz], 方向表示旋转轴, 模长表示旋转角度(弧度)
+        """
+        # 构建绕各轴的旋转矩阵
+        R_x = np.array([
+            [1, 0, 0],
+            [0, np.cos(roll), -np.sin(roll)],
+            [0, np.sin(roll), np.cos(roll)]
+        ])
+        
+        R_y = np.array([
+            [np.cos(pitch), 0, np.sin(pitch)],
+            [0, 1, 0],
+            [-np.sin(pitch), 0, np.cos(pitch)]
+        ])
+        
+        R_z = np.array([
+            [np.cos(yaw), -np.sin(yaw), 0],
+            [np.sin(yaw), np.cos(yaw), 0],
+            [0, 0, 1]
+        ])
+        
+        # 组合旋转矩阵 (顺序: Z-Y-X)
+        R = np.dot(R_z, np.dot(R_y, R_x))
+        
+        # 从旋转矩阵计算旋转矢量
+        theta = np.arccos((np.trace(R) - 1) / 2)
+        
+        if np.abs(theta) < 1e-10:  # 零旋转
+            return np.array([0, 0, 0])
+        else:
+            # 旋转轴
+            axis = np.array([
+                R[2, 1] - R[1, 2],
+                R[0, 2] - R[2, 0],
+                R[1, 0] - R[0, 1]
+            ]) / (2 * np.sin(theta))
+            
+            # 旋转矢量 = 旋转轴 * 旋转角度
+            return axis * theta
+
+
+    def rotvec_to_rpy(self,rotvec: np.ndarray) -> tuple:
+        """
+        将旋转矢量转换为RPY角度(绕X/Y/Z轴旋转)
+        
+        参数:
+            rotvec: 旋转矢量 [rx, ry, rz]
+        
+        返回:
+            (roll, pitch, yaw): 绕X/Y/Z轴的旋转角度(弧度)
+        """
+        theta = np.linalg.norm(rotvec)
+        
+        if np.abs(theta) < 1e-10:  # 零旋转
+            return (0, 0, 0)
+        
+        # 旋转轴
+        axis = rotvec / theta
+        
+        # 构建旋转矩阵 (Rodrigues公式)
+        K = np.array([
+            [0, -axis[2], axis[1]],
+            [axis[2], 0, -axis[0]],
+            [-axis[1], axis[0], 0]
+        ])
+        
+        R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * np.dot(K, K)
+        
+        # 从旋转矩阵提取RPY (采用Z-Y-X顺序)
+        # 参考: https://en.wikipedia.org/wiki/Rotation_formalisms_in_three_dimensions
+        sy = np.sqrt(R[0, 0]**2 + R[1, 0]**2)
+        
+        singular = sy < 1e-6
+        
+        if not singular:
+            roll = np.arctan2(R[2, 1], R[2, 2])
+            pitch = np.arctan2(-R[2, 0], sy)
+            yaw = np.arctan2(R[1, 0], R[0, 0])
+        else:
+            roll = np.arctan2(-R[1, 2], R[1, 1])
+            pitch = np.arctan2(-R[2, 0], sy)
+            yaw = 0
+        
+        return (roll, pitch, yaw)
+    

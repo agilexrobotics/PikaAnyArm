@@ -117,7 +117,7 @@ class RosOperator:
             joint_position.append(sol_q[5])
             
             #夹爪值
-            joint_position.append((self.gripper_value-0.05) * 0.04)
+            joint_position.append(self.gripper_value)
             
             joint_state_msg = JointState()
             joint_state_msg.header = Header()
@@ -284,7 +284,7 @@ class RosOperator:
     def init_ros(self):
         # rospy.init_node(f'piper_IK{self.args.index_name}', anonymous=True)  #  /piper_FK/urdf_end_pose  /piper_IK/ctrl_end_pose
         # rospy.Subscriber(f'/piper_IK{self.args.index_name}/ctrl_end_pose', PoseStamped, self.arm_end_pose_callback, queue_size=1)
-        self.arm_joint_state_publisher = rospy.Publisher(f'/joint_states{self.index_name}', JointState, queue_size=10)
+        self.arm_joint_state_publisher = rospy.Publisher(f'/joint_states_gripper{self.index_name}', JointState, queue_size=10)
         self.arm_end_pose_publisher = rospy.Publisher(f'/piper_IK{self.index_name}/urdf_end_pose', PoseStamped, queue_size=10)
         self.arm_end_pose_orient_publisher = rospy.Publisher(f'/piper_IK{self.index_name}/urdf_end_pose_orient', PoseStamped, queue_size=10)
         self.arm_receive_end_pose_publisher = rospy.Publisher(f'/piper_IK{self.index_name}/receive_end_pose_orient', PoseStamped, queue_size=10)
@@ -294,7 +294,7 @@ class RosOperator:
         rospy.Service(f'/teleop_trigger{self.index_name}',Trigger, self.handle_trigger)        
         rospy.Subscriber(f'/gripper{self.index_name}/joint_state', JointState, self.gripper_callback, queue_size=1)
         # 订阅joint_states_single话题获取当前关节位置
-        rospy.Subscriber(f'/puppet/joint{self.index_name}', JointState, self.joint_states_callback, queue_size=1)
+        rospy.Subscriber(f'joint_states_single{self.index_name}', JointState, self.joint_states_callback, queue_size=1)
         import time 
         time.sleep(0.5)
         self.init_pose()
