@@ -139,7 +139,7 @@ class RosOperator:
                 self.teleop_status_publisher.publish(status_msg)
             rate.sleep()
 
-    def teleop_piper_status_callback(self, req):
+    def teleop_trigger_callback(self, req):
         if self.status:
             self.status = False
             status_msg = TeleopStatus()
@@ -169,7 +169,7 @@ class RosOperator:
         self.arm_end_pose_subscriber = rospy.Subscriber(f'/piper_FK{self.args.index_name}/urdf_end_pose_orient', PoseStamped, self.arm_end_pose_callback, queue_size=1)
         self.arm_end_pose_ctrl_publisher = rospy.Publisher(f'/piper_IK{self.args.index_name}/ctrl_end_pose', PoseStamped, queue_size=1)
         self.teleop_status_publisher = rospy.Publisher(f'/teleop_status{self.args.index_name}', TeleopStatus, queue_size=1)
-        self.status_srv = rospy.Service(f'/teleop_piper_status{self.args.index_name}', Trigger, self.teleop_piper_status_callback)
+        self.status_srv = rospy.Service(f'/teleop_trigger{self.args.index_name}', Trigger, self.teleop_trigger_callback)
 
 
 def get_arguments():
