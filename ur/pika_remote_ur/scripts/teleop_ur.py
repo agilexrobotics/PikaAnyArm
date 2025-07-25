@@ -172,7 +172,7 @@ class Arm_IK:
     def init_ros(self):
         rospy.Subscriber(f'/pika_pose{self.index_name}', PoseStamped, self.pose_callback, queue_size=1)
                 
-        rospy.Service(f'/teleop_piper_status{self.index_name}',Trigger, self.handle_trigger)
+        rospy.Service(f'/teleop_trigger{self.index_name}',Trigger, self.handle_trigger)
 
     def start(self):
 

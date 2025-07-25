@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>remote_operation</name>
+  <name>pika_remote_ur</name>
   <version>0.0.0</version>
   <description>The remote_operation package</description>
 

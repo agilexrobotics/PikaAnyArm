@@ -1,3 +1,14 @@
+
+## 2025.07.24
+### Features
+None
+
+### Bug Fixes
+None
+
+### Other Changes
+- 将遥操各款机械臂分成单独的功能包
+
 ## 2025.07.23
 ### Features
 - 增加了遥操 ur12e 机械臂

@@ -1,0 +1,41 @@
+<launch>
+
+    <include file="$(find piper)/launch/start_double_piper.launch"/>
+
+    <!-- <include file="$(find pika_locator)/launch/pika_double_locator.launch"/> -->
+
+    <node name="piper_FK_l" pkg="pika_remote_piper" type="piper_FK.py" output="screen" >
+        <param name="index_name" value="_l" />
+        <rosparam command="load" file="$(find pika_remote_piper)/config/piper_rand_params.yaml" />
+        <!-- Parameters gripper_xyzrpy and target_joint_state loaded from YAML -->
+    </node>
+    <node name="piper_IK_l" pkg="pika_remote_piper" type="piper_IK.py" output="screen">
+        <param name="index_name" value="_l" />
+        <rosparam command="load" file="$(find pika_remote_piper)/config/piper_rand_params.yaml" />
+        <!-- Parameters gripper_xyzrpy and target_joint_state loaded from YAML -->
+    </node>
+    <node name="teleop_piper_l" pkg="pika_remote_piper" type="teleop_piper_publish.py" output="screen" >
+        <param name="index_name" value="_l" />
+    </node>
+
+    <node name="piper_FK_r" pkg="pika_remote_piper" type="piper_FK.py" output="screen" >
+        <param name="index_name" value="_r" />
+        <rosparam command="load" file="$(find pika_remote_piper)/config/piper_rand_params.yaml" />
+        <!-- Parameters gripper_xyzrpy and target_joint_state loaded from YAML -->
+    </node>
+    <node name="piper_IK_r" pkg="pika_remote_piper" type="piper_IK.py" output="screen" >
+        <param name="index_name" value="_r" />
+        <rosparam command="load" file="$(find pika_remote_piper)/config/piper_rand_params.yaml" />
+        <!-- Parameters gripper_xyzrpy and target_joint_state loaded from YAML -->
+    </node>
+    <node name="teleop_piper_r" pkg="pika_remote_piper" type="teleop_piper_publish.py" output="screen" >
+        <param name="index_name" value="_r" />
+    </node>
+</launch>
+
+
+
+
+  
+
+

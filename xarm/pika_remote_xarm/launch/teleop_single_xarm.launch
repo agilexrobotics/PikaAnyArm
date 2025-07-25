@@ -12,9 +12,8 @@
 
     <include file="$(find pika_locator)/launch/pika_single_locator.launch"/>
 
-    <node name="teleop_xarm" pkg="remote_operation" type="teleop_xarm.py" output="screen" >
-        <rosparam command="load" file="$(find remote_operation)/config/xarm_params.yaml" />
-        <!-- Parameters eff_position and pika_to_arm loaded from YAML -->
+    <node name="teleop_xarm" pkg="pika_remote_xarm" type="teleop_xarm.py" output="screen" >
+        <rosparam command="load" file="$(find pika_remote_xarm)/config/xarm_params.yaml" />
     </node>
     
 </launch>

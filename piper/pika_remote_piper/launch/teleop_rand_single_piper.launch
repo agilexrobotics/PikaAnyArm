@@ -1,0 +1,16 @@
+<launch>
+    <include file="$(find piper)/launch/start_single_piper.launch"/>
+
+    <!-- <include file="$(find sensor_tools)/launch/open_single_sensor.launch"/> -->
+
+    <node name="piper_FK" pkg="pika_remote_piper" type="piper_FK.py" output="screen" >
+        <rosparam command="load" file="$(find pika_remote_piper)/config/piper_rand_params.yaml" />
+        <!-- Parameters gripper_xyzrpy and target_joint_state loaded from YAML -->
+    </node>
+    <node name="piper_IK" pkg="pika_remote_piper" type="piper_IK.py" output="screen" >
+        <rosparam command="load" file="$(find pika_remote_piper)/config/piper_rand_params.yaml" />
+        <!-- Parameters gripper_xyzrpy and target_joint_state loaded from YAML -->
+    </node>
+    <node name="teleop_piper" pkg="pika_remote_piper" type="teleop_piper_publish.py" output="screen" >
+    </node>
+</launch>
