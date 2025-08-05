@@ -149,6 +149,7 @@ class RosOperator:
             print("close")
         else:
             if self.thread is None or not self.thread.is_alive():
+                self.stop_thread = False
                 self.thread = threading.Thread(target=self.status_changing)
                 self.thread.start()
             else:
