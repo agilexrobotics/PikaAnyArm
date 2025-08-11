@@ -89,8 +89,8 @@ class RosOperator(Node):
         self.sol_q = None
         self.msg = None
         self.xyzrpy = None
-        self.init_ros()
         self.arm_ik = Arm_IK(args)
+        self.init_ros()
 
     def arm_joint_state_ctrl(self, joint_state):
         self.last_ctrl_arm_joint_state = joint_state[:6]
