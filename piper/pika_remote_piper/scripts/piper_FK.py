@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-import casadi
-import meshcat.geometry as mg
 import math
 import numpy as np
-import pinocchio as pin
-from pinocchio import casadi as cpin
-from pinocchio.visualize import MeshcatVisualizer
-from transformations import quaternion_from_euler, euler_from_quaternion, quaternion_from_matrix
+from transformations import quaternion_from_euler
 import os
-import sys
-import cv2
 import rospy
 from std_msgs.msg import Header
 from sensor_msgs.msg import JointState
@@ -17,10 +10,7 @@ from geometry_msgs.msg import PoseStamped
 import argparse
 import threading
 
-# 获取当前脚本所在的目录路径，并将其存储在变量 ROOT_DIR 中
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(ROOT_DIR,'dist_pyarmor_FIK'))
-from wrapper import Arm_FK
+from forward_inverse_kinematics import Arm_FK
 
 
 os.environ['MKL_NUM_THREADS'] = '1'
