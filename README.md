@@ -31,3 +31,24 @@ pika_ros：https://github.com/agilexrobotics/pika_ros
 - 操作系统：Ubuntu20.04
 - ROS：noetic
 
+## CHANGELOG
+
+### 2025.06.17
+#### Features
+None
+
+#### Bug Fixes
+- 修复了需要从绝对路径加载URDF的问题
+
+#### Other Changes
+None
+
+### 2025.06.11
+#### Features
+- 修改了遥操作机械臂的方式： 定义好的初始姿态启动控制，且结束遥操后机械臂回到初始姿态 ---> 可以双击停止控制，再次双击即可从停止位姿继续控制
+
+#### Bug Fixes
+None
+
+#### Other Changes
+None

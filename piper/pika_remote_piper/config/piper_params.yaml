@@ -1,0 +1,9 @@
+#夹爪相对于机器人joint6的偏移量
+#格式：[x， y, z，roll，pitch，yaw]
+#单位：米和弧度
+gripper_xyzrpy: [0.19, 0.0, 0.2, 0.0, 0.0, 0.0]
+
+# 格式: [joint1, joint2, joint3, joint4, joint5, joint6, joint7]
+# 单位：弧度
+target_joint_state: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+

@@ -1,6 +1,0 @@
-# list of target joint positions in radian.
-float64[] target
-
----
-
-bool success

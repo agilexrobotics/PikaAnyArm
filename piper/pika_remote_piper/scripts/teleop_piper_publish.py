@@ -4,15 +4,16 @@ import numpy as np
 from transformations import quaternion_from_euler, euler_from_quaternion, quaternion_from_matrix
 import os
 import sys
-import rospy
+import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header
 import argparse
 from nav_msgs.msg import Odometry
 import threading
-from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
-from std_srvs.srv import Trigger, TriggerRequest, TriggerResponse
+from std_srvs.srv import Trigger
 from data_msgs.msg import TeleopStatus
+import time
 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -63,8 +64,9 @@ def create_transformation_matrix(x, y, z, roll, pitch, yaw):
     return transformation_matrix
 
 
-class RosOperator:
+class RosOperator(Node):
     def __init__(self, args):
+        super().__init__('teleop_piper_publisher')
         self.args = args
         self.localization_pose_subscriber = None
         self.arm_end_pose_subscriber = None
@@ -95,7 +97,7 @@ class RosOperator:
             pose_msg = PoseStamped()
             pose_msg.header = Header()
             pose_msg.header.frame_id = "map"
-            pose_msg.header.stamp = rospy.Time.now()
+            pose_msg.header.stamp = self.get_clock().now().to_msg()
             pose_msg.pose.position.x = pose_xyzrpy[0]
             pose_msg.pose.position.y = pose_xyzrpy[1]
             pose_msg.pose.position.z = pose_xyzrpy[2]
@@ -103,7 +105,7 @@ class RosOperator:
             pose_msg.pose.orientation.x = pose_xyzrpy[3]  # q[0]
             pose_msg.pose.orientation.y = pose_xyzrpy[4]  # q[1]
             pose_msg.pose.orientation.z = pose_xyzrpy[5]  # q[2]
-            pose_msg.pose.orientation.w = 0  # q[3]
+            pose_msg.pose.orientation.w = 0.0  # q[3]
             self.arm_end_pose_ctrl_publisher.publish(pose_msg)
             status_msg = TeleopStatus()
             status_msg.quit = False
@@ -120,8 +122,7 @@ class RosOperator:
     def status_changing(self):
         self.refresh_localization_pose = True
         self.refresh_arm_end_pose = True
-        rate = rospy.Rate(10)
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             if self.stop_thread:
                 self.status = False
                 self.refresh_localization_pose = False
@@ -137,9 +138,9 @@ class RosOperator:
                 status_msg.fail = True
                 print("wait")
                 self.teleop_status_publisher.publish(status_msg)
-            rate.sleep()
+            time.sleep(0.1)
 
-    def teleop_trigger_callback(self, req):
+    def teleop_trigger_callback(self, request, response):
         if self.status:
             self.status = False
             status_msg = TeleopStatus()
@@ -161,16 +162,16 @@ class RosOperator:
                 status_msg.fail = False
                 self.teleop_status_publisher.publish(status_msg)
                 print("close")
-        return TriggerResponse()
+        return response
 
     def init_ros(self):
-        rospy.init_node(f'teleop_piper_publisher{self.args.index_name}', anonymous=True)
-        self.args.index_name = rospy.get_param('~index_name', default="")
-        self.localization_pose_subscriber = rospy.Subscriber(f'/pika_pose{self.args.index_name}', PoseStamped, self.localization_pose_callback, queue_size=1)
-        self.arm_end_pose_subscriber = rospy.Subscriber(f'/piper_FK{self.args.index_name}/urdf_end_pose_orient', PoseStamped, self.arm_end_pose_callback, queue_size=1)
-        self.arm_end_pose_ctrl_publisher = rospy.Publisher(f'/piper_IK{self.args.index_name}/ctrl_end_pose', PoseStamped, queue_size=1)
-        self.teleop_status_publisher = rospy.Publisher(f'/teleop_status{self.args.index_name}', TeleopStatus, queue_size=1)
-        self.status_srv = rospy.Service(f'/teleop_trigger{self.args.index_name}', Trigger, self.teleop_trigger_callback)
+        self.declare_parameter('index_name', "")
+        self.args.index_name = self.get_parameter('index_name').get_parameter_value().string_value
+        self.localization_pose_subscriber = self.create_subscription(PoseStamped, f'/pika_pose{self.args.index_name}', self.localization_pose_callback, 1)
+        self.arm_end_pose_subscriber = self.create_subscription(PoseStamped, f'/piper_FK{self.args.index_name}/urdf_end_pose_orient', self.arm_end_pose_callback, 1)
+        self.arm_end_pose_ctrl_publisher = self.create_publisher(PoseStamped, f'/piper_IK{self.args.index_name}/ctrl_end_pose', 1)
+        self.teleop_status_publisher = self.create_publisher(TeleopStatus, f'/teleop_status{self.args.index_name}', 1)
+        self.status_srv = self.create_service(Trigger, f'/teleop_trigger{self.args.index_name}', self.teleop_trigger_callback)
 
 
 def get_arguments():
@@ -184,10 +185,10 @@ def get_arguments():
 
 def main():
     args = get_arguments()
+    rclpy.init()
     ros_operator = RosOperator(args)
-    rospy.spin()
+    rclpy.spin(ros_operator)
 
 
 if __name__ == "__main__":
     main()
-    

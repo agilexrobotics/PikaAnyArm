@@ -14,6 +14,14 @@ if ! dpkg -l | grep -q "can-utils"; then
     exit 1
 fi
 
+# 检查 iproute2 是否已安装
+if ! dpkg -l | grep -q "iproute2"; then
+    echo "\e[31m错误: 系统中未检测到 iproute2。\e[0m"
+    echo "请使用以下命令安装 iproute2:"
+    echo "sudo apt update && sudo apt install iproute2"
+    exit 1
+fi
+
 echo "ethtool 和 can-utils 均已安装。"
 
 # 遍历所有 CAN 接口
