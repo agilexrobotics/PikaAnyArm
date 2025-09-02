@@ -59,6 +59,10 @@ def create_transformation_matrix(x, y, z, roll, pitch, yaw):
 
 class RosOperator:
     def __init__(self, args):
+        rospy.init_node('piper_FK', anonymous=True)  #  /piper_FK/urdf_end_pose  /piper_IK/ctrl_end_pose
+       
+        self.urdf_path = rospy.get_param('~urdf_path', default="")
+        
         self.args = args
         self.lift_subscriber = None
         self.arm_joint_state_subscriber = None
@@ -68,7 +72,7 @@ class RosOperator:
         self.lift_msg = None
         self.calc_thread = None
         self.init_ros()
-        self.arm_fk = Arm_FK(args)
+        self.arm_fk = Arm_FK(args,self.urdf_path)
 
     def lift_callback(self, msg):
         self.lift_msg = msg
@@ -109,7 +113,7 @@ class RosOperator:
             rate.sleep()
 
     def init_ros(self):
-        rospy.init_node(f'piper_FK{self.args.index_name}', anonymous=True)
+        # rospy.init_node(f'piper_FK{self.args.index_name}', anonymous=True)
         self.args.index_name = rospy.get_param('~index_name', default="")
         self.args.gripper_xyzrpy = rospy.get_param('~gripper_xyzrpy', default=[0.19, 0.0, 0.0, 0.0, 0.0, 0.0])
         if self.args.lift:

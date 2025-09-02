@@ -60,10 +60,14 @@ def create_transformation_matrix(x, y, z, roll, pitch, yaw):
 
 class RosOperator:
     def __init__(self, args):
+        rospy.init_node('piper_FK', anonymous=True)  #  /piper_FK/urdf_end_pose  /piper_IK/ctrl_end_pose
+       
+        self.urdf_path = rospy.get_param('~urdf_path', default="")
+        
         self.args = args
         self.arm_joint_state_publisher = None
         self.arm_end_pose_publisher = None
-        self.arm_end_pose_orient_publisher = None
+        self.arm_end_pose_orient_publisher = None           
         self.arm_receive_end_pose_publisher = None
         self.lift_publisher = None
         self.last_ctrl_arm_joint_state = None
@@ -73,7 +77,7 @@ class RosOperator:
         self.sol_q = None
         self.msg = None
         self.xyzrpy = None
-        self.arm_ik = Arm_IK(args)
+        self.arm_ik = Arm_IK(args,self.urdf_path)
         self.init_ros()
 
     def arm_joint_state_ctrl(self, joint_state):
@@ -237,7 +241,7 @@ class RosOperator:
             self.arm_control_status_publisher.publish(status_msg)
 
     def init_ros(self):
-        rospy.init_node(f'piper_IK{self.args.index_name}', anonymous=True)  #  /piper_FK/urdf_end_pose  /piper_IK/ctrl_end_pose
+        # rospy.init_node(f'piper_IK{self.args.index_name}', anonymous=True)  #  /piper_FK/urdf_end_pose  /piper_IK/ctrl_end_pose
         self.args.index_name = rospy.get_param('~index_name', default="")
         self.args.gripper_xyzrpy = rospy.get_param('~gripper_xyzrpy', default=[0.19, 0.0, 0.0, 0.0, 0.0, 0.0])
         rospy.Subscriber(f'/joint_states_single{self.args.index_name}', JointState, self.arm_joint_state_callback, queue_size=1)

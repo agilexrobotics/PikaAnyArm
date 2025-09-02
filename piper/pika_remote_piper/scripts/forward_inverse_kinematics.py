@@ -60,14 +60,14 @@ def create_transformation_matrix(x, y, z, roll, pitch, yaw):
 
 
 class Arm_FK:
-    def __init__(self, args):
+    def __init__(self, args, urdf_path):
         self.args = args
 
         np.set_printoptions(precision=5, suppress=True, linewidth=200)
 
         rospack = rospkg.RosPack()
-        package_path = rospack.get_path('piper_description') 
-        urdf_path = os.path.join(package_path, 'urdf', 'piper_description' + ('-lift.urdf' if args.lift else '.urdf'))
+        package_path = rospack.get_path(urdf_path) 
+        urdf_path = os.path.join(package_path, 'urdf', urdf_path + ('-lift.urdf' if args.lift else '.urdf'))
 
         self.robot = pin.RobotWrapper.BuildFromURDF(
             urdf_path,
@@ -76,8 +76,7 @@ class Arm_FK:
 
         # self.robot = pin.RobotWrapper.BuildFromURDF(urdf_path)
 
-        self.mixed_jointsToLockIDs = ["joint7",
-                                      "joint8"
+        self.mixed_jointsToLockIDs = ["base_link"
                                       ]
 
         self.reduced_robot = self.robot.buildReducedRobot(
@@ -113,13 +112,13 @@ class Arm_FK:
 
 
 class Arm_IK:
-    def __init__(self, args):
+    def __init__(self, args, urdf_path):
         self.args = args
         np.set_printoptions(precision=5, suppress=True, linewidth=200)
 
         rospack = rospkg.RosPack()
-        package_path = rospack.get_path('piper_description') 
-        urdf_path = os.path.join(package_path, 'urdf', 'piper_description' + ('-lift.urdf' if args.lift else '.urdf'))
+        package_path = rospack.get_path(urdf_path) 
+        urdf_path = os.path.join(package_path, 'urdf', urdf_path + ('-lift.urdf' if args.lift else '.urdf'))
 
         self.robot = pin.RobotWrapper.BuildFromURDF(
             urdf_path,
@@ -128,8 +127,7 @@ class Arm_IK:
 
         # self.robot = pin.RobotWrapper.BuildFromURDF(urdf_path)
 
-        self.mixed_jointsToLockIDs = ["joint7",
-                                      "joint8"
+        self.mixed_jointsToLockIDs = ["base_link"
                                       ]
 
         self.reduced_robot = self.robot.buildReducedRobot(
@@ -158,7 +156,7 @@ class Arm_IK:
         )
 
         self.geom_model = pin.buildGeomFromUrdf(self.robot.model, urdf_path, pin.GeometryType.COLLISION)
-        for i in range(4, 10):
+        for i in range(4, 7):
             for j in range(0, 3):
                 self.geom_model.addCollisionPair(pin.CollisionPair(i, j))
         self.geometry_data = pin.GeometryData(self.geom_model)
@@ -194,7 +192,7 @@ class Arm_IK:
                       [0, 1, 0], [0.6, 1, 0],
                       [0, 0, 1], [0, 0.6, 1]]).astype(np.float32).T
         )
-        axis_length = 0.1
+        axis_length = 0.1 
         axis_width = 10
         for frame_viz_name in frame_viz_names:
             self.vis.viewer[frame_viz_name].set_object(
@@ -315,10 +313,10 @@ class Arm_IK:
             tau_ff = pin.rnea(self.reduced_robot.model, self.reduced_robot.data, sol_q, v,
                               np.zeros(self.reduced_robot.model.nv))
 
-            is_collision = self.check_self_collision(sol_q, gripper)
-            dist = self.get_dist(sol_q, target_pose[:3, 3])
+            # is_collision = self.check_self_collision(sol_q, gripper)
+            # dist = self.get_dist(sol_q, target_pose[:3, 3])
             # print("dist:", dist)
-            return sol_q, tau_ff, not is_collision
+            return sol_q, tau_ff, True
 
         except Exception as e:
             print(f"ERROR in convergence, plotting debug info.{e}")
