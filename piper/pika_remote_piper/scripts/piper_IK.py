@@ -132,6 +132,8 @@ class RosOperator(Node):
             self.publish_lock.acquire() 
             msg, sol_q, xyzrpy = self.msg, self.sol_q, self.xyzrpy
             self.publish_lock.release() 
+            if msg is not None and (rclpy.time.Time.from_msg(self.get_clock().now().to_msg()).nanoseconds / 1e9) - (rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds / 1e9) > 1.0: 
+                msg = None
             if msg is None or sol_q is None or xyzrpy is None:
                 rate.sleep()
                 continue
