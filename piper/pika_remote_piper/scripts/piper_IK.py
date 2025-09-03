@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
+import casadi
+import meshcat.geometry as mg
 import math
 import numpy as np
 import pinocchio as pin
-from transformations import quaternion_from_euler
+from pinocchio import casadi as cpin
+from pinocchio.visualize import MeshcatVisualizer
+from transformations import quaternion_from_euler, euler_from_quaternion, quaternion_from_matrix
 import os
+import sys
+import cv2
 import rospy
 from std_msgs.msg import Header
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped
 import argparse
+import time
 from data_msgs.msg import ArmControlStatus
 import threading
 
-from forward_inverse_kinematics import Arm_IK
+# 获取当前脚本所在的目录路径，并将其存储在变量 ROOT_DIR 中
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(ROOT_DIR,'dist_pyarmor_FIK'))
+from wrapper import Arm_IK
+
 
 os.environ['MKL_NUM_THREADS'] = '1'
 os.environ['NUMEXPR_NUM_THREADS'] = '1'
@@ -114,6 +125,8 @@ class RosOperator:
             self.publish_lock.acquire() 
             msg, sol_q, xyzrpy = self.msg, self.sol_q, self.xyzrpy
             self.publish_lock.release() 
+            if msg is not None and (rospy.Time.now().to_sec() - msg.header.stamp.to_sec() > 1):
+                msg = None
             if msg is None or sol_q is None or xyzrpy is None:
                 rate.sleep()
                 continue
