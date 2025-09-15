@@ -14,6 +14,7 @@ import threading
 from std_srvs.srv import Trigger
 from data_msgs.msg import TeleopStatus
 import time
+from sensor_msgs.msg import JointState
 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +85,12 @@ class RosOperator(Node):
 
         self.status_srv = None
         self.status = False
+        
+        # 存储当前关节位置
+        self.current_joint_positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        # 标记是否已获取到当前关节位置
+        self.joint_positions_received = False
+        
         self.init_ros()
 
     def localization_pose_callback(self, msg):
@@ -148,6 +155,7 @@ class RosOperator(Node):
             status_msg.fail = False
             self.teleop_status_publisher.publish(status_msg)
             print("close")
+            self.init_pose()
         else:
             if self.thread is None or not self.thread.is_alive():
                 self.stop_thread = False
@@ -162,6 +170,7 @@ class RosOperator(Node):
                 status_msg.fail = False
                 self.teleop_status_publisher.publish(status_msg)
                 print("close")
+                self.init_pose()
         return response
 
     def init_ros(self):
@@ -172,11 +181,102 @@ class RosOperator(Node):
         self.arm_end_pose_ctrl_publisher = self.create_publisher(PoseStamped, f'/piper_IK{self.args.index_name}/ctrl_end_pose', 1)
         self.teleop_status_publisher = self.create_publisher(TeleopStatus, f'/teleop_status{self.args.index_name}', 1)
         self.status_srv = self.create_service(Trigger, f'/teleop_trigger{self.args.index_name}', self.teleop_trigger_callback)
+        
+        self.arm_joint_state_publisher = self.create_publisher(JointState, f'/joint_states{self.args.index_name}', 1)
+        self.args.return_zero_position = self.get_parameter('~return_zero_position', default="False")
+        # 订阅joint_states_single话题获取当前关节位置
+        self.create_subscription(JointState, f'/joint_states_gripper{self.args.index_name}',  self.joint_states_callback, 1)
+        import time 
+        time.sleep(0.5)
+        self.init_pose()
 
-
+    def joint_states_callback(self, msg):
+        """
+        处理从joint_states_single话题接收到的关节状态数据
+        """
+        # 确保消息中包含关节位置数据
+        if len(msg.position) >= 7:
+            # 更新当前关节位置
+            self.current_joint_positions = list(msg.position[:7])
+            # 标记已接收到关节位置数据
+            self.joint_positions_received = True
+            # rospy.logdebug(f"接收到当前关节位置: {self.current_joint_positions}")
+        
+    # 使用线性插值实现平滑过渡到初始位置
+    def init_pose(self):
+        if self.args.return_zero_position == "True":
+            # 目标关节位置
+            target_joint_state = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            
+            # 获取当前关节位置
+            # 如果已经接收到关节位置数据，使用实际的当前位置
+            # 否则会一步调整到位
+            if self.joint_positions_received:
+                current_positions = self.current_joint_positions
+                
+                # 设置过渡时间和控制频率
+                duration = 0.5  # 过渡持续时间(秒)
+                rate = 50  # 控制频率(Hz)
+                
+                # 计算总步数
+                steps = int(duration * rate)
+                
+                # 计算每一步的增量
+                increments = [(target - current) / steps for current, target in zip(current_positions, target_joint_state)]
+                
+                # 创建ROS2的Rate对象控制循环频率
+                rate_obj = self.create_rate(rate)
+                
+                # 记录开始时间（用于日志）
+                start_time = self.get_clock().now()
+                
+                # 逐步移动到目标位置
+                for step in range(steps + 1):
+                    # 计算当前步骤的位置
+                    interpolated_positions = [current + increment * step for current, increment in zip(current_positions, increments)]
+                    
+                    # 发布关节状态消息
+                    joint_states_msgs = JointState()
+                    joint_states_msgs.header = Header()
+                    joint_states_msgs.header.stamp = self.get_clock().now()
+                    joint_states_msgs.name = [f'joint{i+1}' for i in range(7)]
+                    joint_states_msgs.position = interpolated_positions
+                    
+                    # 发布消息
+                    self.arm_joint_state_publisher.publish(joint_states_msgs)
+                    
+                    # 按照指定频率控制循环
+                    rate_obj.sleep()
+                
+                # 确保最后一帧是精确的目标位置
+                joint_states_msgs = JointState()
+                joint_states_msgs.header = Header()
+                joint_states_msgs.header.stamp = self.get_clock().now()
+                joint_states_msgs.name = [f'joint{i+1}' for i in range(7)]
+                joint_states_msgs.position = target_joint_state
+                self.arm_joint_state_publisher.publish(joint_states_msgs)
+                
+                # 计算实际用时
+                elapsed_time = (self.get_clock().now() - start_time).to_sec()
+                # print(f"平滑移动到初始位置完成，用时: {elapsed_time:.2f}秒")
+                
+            else:
+                start_time = self.get_clock().now()  # 获取当前时间
+                while (self.get_clock().now() - start_time).to_sec() < 0.5:  # 持续发送0.5秒
+                    joint_states_msgs = JointState()
+                    joint_states_msgs.header = Header()
+                    joint_states_msgs.header.stamp = self.get_clock().now()
+                    joint_states_msgs.name = [f'joint{i+1}' for i in range(7)]
+                    joint_states_msgs.position = target_joint_state
+                    self.arm_joint_state_publisher.publish(joint_states_msgs)
+        else:
+            return
+                
 def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--index_name', action='store', type=str, help='index_name',
+                        default="", required=False)
+    parser.add_argument('--return_zero_position', action='store', type=str, help='return_zero_position',
                         default="", required=False)
     # args = parser.parse_args()
     args, unknown = parser.parse_known_args()
