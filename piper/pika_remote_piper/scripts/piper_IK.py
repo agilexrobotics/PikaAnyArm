@@ -223,7 +223,7 @@ class RosOperator:
             diffPitch = abs(xyzrpy[4] - msg.pose.orientation.y)
             diffYaw = abs(xyzrpy[5] - msg.pose.orientation.z)
             # print("diff:", diffX, diffY, diffZ, diffRoll, diffPitch, diffYaw)
-            if diffX > 0.3 or diffY > 0.3 or diffZ > 0.3 or diffRoll > 1 or diffPitch > 1 or diffYaw > 1:
+            if diffX > 0.3 or diffY > 0.3 or diffZ > 0.3:# or diffRoll > 1 or diffPitch > 1 or diffYaw > 1:
                 get_result = False
         # print("result:", sol_q, tau_ff)
         if get_result:
