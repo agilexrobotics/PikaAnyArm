@@ -134,6 +134,7 @@ class RosOperator(Node):
             self.publish_lock.release() 
             if msg is not None and (rclpy.time.Time.from_msg(self.get_clock().now().to_msg()).nanoseconds / 1e9) - (rclpy.time.Time.from_msg(msg.header.stamp).nanoseconds / 1e9) > 1.0: 
                 msg = None
+                self.last_ctrl_arm_joint_state = None
             if msg is None or sol_q is None or xyzrpy is None:
                 rate.sleep()
                 continue
