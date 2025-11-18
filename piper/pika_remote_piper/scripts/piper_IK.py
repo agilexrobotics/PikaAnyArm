@@ -116,6 +116,7 @@ class RosOperator:
             self.publish_lock.release() 
             if msg is not None and (rospy.Time.now().to_sec() - msg.header.stamp.to_sec() > 1):
                 msg = None
+                self.last_ctrl_arm_joint_state = None
             if msg is None or sol_q is None or xyzrpy is None:
                 rate.sleep()
                 continue
