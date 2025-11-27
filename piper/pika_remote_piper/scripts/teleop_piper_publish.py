@@ -183,7 +183,8 @@ class RosOperator(Node):
         self.status_srv = self.create_service(Trigger, f'/teleop_trigger{self.args.index_name}', self.teleop_trigger_callback)
         
         self.arm_joint_state_publisher = self.create_publisher(JointState, f'/joint_states{self.args.index_name}', 1)
-        self.args.return_zero_position = self.get_parameter('~return_zero_position', default="False")
+        # 使用机械臂回零模式
+        #self.args.return_zero_position = self.get_parameter('return_zero_position').get_parameter_value().bool_value
         # 订阅joint_states_single话题获取当前关节位置
         self.create_subscription(JointState, f'/joint_states_gripper{self.args.index_name}',  self.joint_states_callback, 1)
         import time 
