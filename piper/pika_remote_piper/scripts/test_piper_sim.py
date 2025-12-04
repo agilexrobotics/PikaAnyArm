@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+import rospy
+import rospkg
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import PoseStamped
+from std_srvs.srv import Trigger, TriggerResponse
+from tf.transformations import quaternion_from_euler, euler_from_quaternion, quaternion_from_matrix
+
+import casadi
+import pinocchio as pin
+import meshcat.geometry as mg
+from pinocchio import casadi as cpin
+from pinocchio.visualize import MeshcatVisualizer
+
+import os
+import math
+import numpy as np
+
+def matrix_to_xyzrpy(matrix):
+    x = matrix[0, 3]
+    y = matrix[1, 3]
+    z = matrix[2, 3]
+    roll = math.atan2(matrix[2, 1], matrix[2, 2])
+    pitch = math.asin(-matrix[2, 0])
+    yaw = math.atan2(matrix[1, 0], matrix[0, 0])
+    return [x, y, z, roll, pitch, yaw]
+
+def create_transformation_matrix(x, y, z, roll, pitch, yaw):
+    transformation_matrix = np.eye(4)
+    A = np.cos(yaw)
+    B = np.sin(yaw)
+    C = np.cos(pitch)
+    D = np.sin(pitch)
+    E = np.cos(roll)
+    F = np.sin(roll)
+    DE = D * E
+    DF = D * F
+    transformation_matrix[0, 0] = A * C
+    transformation_matrix[0, 1] = A * DF - B * E
+    transformation_matrix[0, 2] = B * F + A * DE
+    transformation_matrix[0, 3] = x
+    transformation_matrix[1, 0] = B * C
+    transformation_matrix[1, 1] = A * E + B * DF
+    transformation_matrix[1, 2] = B * DE - A * F
+    transformation_matrix[1, 3] = y
+    transformation_matrix[2, 0] = -D
+    transformation_matrix[2, 1] = C * F
+    transformation_matrix[2, 2] = C * E
+    transformation_matrix[2, 3] = z
+    transformation_matrix[3, 0] = 0
+    transformation_matrix[3, 1] = 0
+    transformation_matrix[3, 2] = 0
+    transformation_matrix[3, 3] = 1
+    return transformation_matrix
+
+    
+class Arm_IK:
+    def __init__(self):
+        np.set_printoptions(precision=5, suppress=True, linewidth=200)
+        
+        rospack = rospkg.RosPack()
+        package_path = rospack.get_path('piper_description') 
+        urdf_path = os.path.join(package_path, 'urdf', 'piper_description.urdf')
+        
+        # self.robot = pin.RobotWrapper.BuildFromURDF(urdf_path)
+        self.robot = pin.RobotWrapper.BuildFromURDF(
+            urdf_path,
+            package_dirs=package_path,  # 添加包搜索路径
+        )
+         
+        self.mixed_jointsToLockIDs = ["joint7",
+                                      "joint8"
+                                      ]
+
+        self.reduced_robot = self.robot.buildReducedRobot(
+            list_of_joints_to_lock=self.mixed_jointsToLockIDs,
+            reference_configuration=np.array([0] * self.robot.model.nq),
+        )
+
+        self.first_matrix = create_transformation_matrix(0, 0, 0, 0, -1.57, 0)  # 机械臂夹爪坐标系到pika sense夹爪坐标系的变换矩阵
+        # self.second_matrix = create_transformation_matrix(self.args.gripper_xyzrpy[0], self.args.gripper_xyzrpy[1], self.args.gripper_xyzrpy[2],
+        #                                                   self.args.gripper_xyzrpy[3], self.args.gripper_xyzrpy[4], self.args.gripper_xyzrpy[5])
+        
+        self.second_matrix = create_transformation_matrix(0.19, 0.0, 0.0, 0, 0, 0)  #第六轴到末端夹爪坐标的变换矩阵
+        self.last_matrix = np.dot(self.first_matrix, self.second_matrix)
+        q = quaternion_from_matrix(self.last_matrix)
+        self.reduced_robot.model.addFrame(
+            pin.Frame('ee',
+                      self.reduced_robot.model.getJointId('joint6'),
+                      pin.SE3(
+                          # pin.Quaternion(1, 0, 0, 0),
+                          pin.Quaternion(q[3], q[0], q[1], q[2]),
+                          np.array([self.last_matrix[0, 3], self.last_matrix[1, 3], self.last_matrix[2, 3]]),  # -y
+                      ),
+                      pin.FrameType.OP_FRAME)
+        )
+
+        self.geom_model = pin.buildGeomFromUrdf(self.robot.model, urdf_path, pin.GeometryType.COLLISION)
+        for i in range(4, 10):
+            for j in range(0, 3):
+                self.geom_model.addCollisionPair(pin.CollisionPair(i, j))
+        self.geometry_data = pin.GeometryData(self.geom_model)
+
+        self.init_data = np.zeros(self.reduced_robot.model.nq)
+        self.history_data = np.zeros(self.reduced_robot.model.nq)
+
+        # # Initialize the Meshcat visualizer  for visualization
+        self.vis = MeshcatVisualizer(self.reduced_robot.model, self.reduced_robot.collision_model, self.reduced_robot.visual_model)
+        self.vis.initViewer(open=True)
+        self.vis.loadViewerModel("pinocchio")
+        self.vis.displayFrames(True, frame_ids=[113, 114], axis_length=0.15, axis_width=5)
+        self.vis.display(pin.neutral(self.reduced_robot.model))
+
+        # Enable the display of end effector target frames with short axis lengths and greater width.
+        frame_viz_names = ['ee_target']
+        FRAME_AXIS_POSITIONS = (
+            np.array([[0, 0, 0], [1, 0, 0],
+                      [0, 0, 0], [0, 1, 0],
+                      [0, 0, 0], [0, 0, 1]]).astype(np.float32).T
+        )
+        FRAME_AXIS_COLORS = (
+            np.array([[1, 0, 0], [1, 0.6, 0],
+                      [0, 1, 0], [0.6, 1, 0],
+                      [0, 0, 1], [0, 0.6, 1]]).astype(np.float32).T
+        )
+        axis_length = 0.1
+        axis_width = 10
+        for frame_viz_name in frame_viz_names:
+            self.vis.viewer[frame_viz_name].set_object(
+                mg.LineSegments(
+                    mg.PointsGeometry(
+                        position=axis_length * FRAME_AXIS_POSITIONS,
+                        color=FRAME_AXIS_COLORS,
+                    ),
+                    mg.LineBasicMaterial(
+                        linewidth=axis_width,
+                        vertexColors=True,
+                    ),
+                )
+            )
+
+        # Creating Casadi models and data for symbolic computing
+        self.cmodel = cpin.Model(self.reduced_robot.model)
+        self.cdata = self.cmodel.createData()
+
+        # Creating symbolic variables
+        self.cq = casadi.SX.sym("q", self.reduced_robot.model.nq, 1)
+        self.cTf = casadi.SX.sym("tf", 4, 4)
+        cpin.framesForwardKinematics(self.cmodel, self.cdata, self.cq)
+
+        # # Get the hand joint ID and define the error function
+        self.gripper_id = self.reduced_robot.model.getFrameId("ee")
+        self.error = casadi.Function(
+            "error",
+            [self.cq, self.cTf],
+            [
+                casadi.vertcat(
+                    cpin.log6(
+                        self.cdata.oMf[self.gripper_id].inverse() * cpin.SE3(self.cTf)
+                    ).vector,
+                )
+            ],
+        )
+
+        # Defining the optimization problem
+        self.opti = casadi.Opti()
+        self.var_q = self.opti.variable(self.reduced_robot.model.nq)
+        # self.var_q_last = self.opti.parameter(self.reduced_robot.model.nq)   # for smooth
+        self.param_tf = self.opti.parameter(4, 4)
+
+        # self.totalcost = casadi.sumsqr(self.error(self.var_q, self.param_tf))
+        # self.regularization = casadi.sumsqr(self.var_q)
+
+        error_vec = self.error(self.var_q, self.param_tf)
+        pos_error = error_vec[:3]  # 取前3个值为位置误差
+        ori_error = error_vec[3:]  # 取后3个值为姿态误差
+        # 设置位置和姿态的权重
+        weight_position = 1.0  # 位置权重
+        weight_orientation = 0.1  # 姿态权重
+        # 总成本函数 
+        self.totalcost = casadi.sumsqr(weight_position * pos_error) + casadi.sumsqr(weight_orientation * ori_error)
+        # 正则化项
+        self.regularization = casadi.sumsqr(self.var_q)
+
+        # Setting optimization constraints and goals
+        self.opti.subject_to(self.opti.bounded(
+            self.reduced_robot.model.lowerPositionLimit,
+            self.var_q,
+            self.reduced_robot.model.upperPositionLimit)
+        )
+        # print("self.reduced_robot.model.lowerPositionLimit:", self.reduced_robot.model.lowerPositionLimit)
+        # print("self.reduced_robot.model.upperPositionLimit:", self.reduced_robot.model.upperPositionLimit)
+        self.opti.minimize(20 * self.totalcost + 0.01 * self.regularization)
+        # self.opti.minimize(20 * self.totalcost + 0.01 * self.regularization + 0.1 * self.smooth_cost) # for smooth
+
+        opts = {
+            'ipopt': {
+                'print_level': 0,
+                'max_iter': 50,
+                'tol': 1e-4
+            },
+            'print_time': False
+        }
+        self.opti.solver("ipopt", opts)
+
+    def ik_fun(self, target_pose, gripper=0, motorstate=None, motorV=None):
+        gripper = np.array([gripper/2.0, -gripper/2.0])
+        if motorstate is not None:
+            self.init_data = motorstate
+        self.opti.set_initial(self.var_q, self.init_data)
+
+        self.vis.viewer['ee_target'].set_transform(target_pose)     # for visualization
+
+        self.opti.set_value(self.param_tf, target_pose)
+        # self.opti.set_value(self.var_q_last, self.init_data) # for smooth
+
+        try:
+            # sol = self.opti.solve()
+            sol = self.opti.solve_limited()
+            sol_q = self.opti.value(self.var_q)
+
+            if self.init_data is not None:
+                max_diff = max(abs(self.history_data - sol_q))
+                # print("max_diff:", max_diff)
+                self.init_data = sol_q
+                if max_diff > 30.0/180.0*3.1415:
+                    # print("Excessive changes in joint angle:", max_diff)
+                    self.init_data = np.zeros(self.reduced_robot.model.nq)
+            else:
+                self.init_data = sol_q
+            self.history_data = sol_q
+
+            self.vis.display(sol_q)  # for visualization
+
+            if motorV is not None:
+                v = motorV * 0.0
+            else:
+                v = (sol_q - self.init_data) * 0.0
+
+            tau_ff = pin.rnea(self.reduced_robot.model, self.reduced_robot.data, sol_q, v,
+                              np.zeros(self.reduced_robot.model.nv))
+
+            # is_collision = self.check_self_collision(sol_q, gripper)
+            dist = self.get_dist(sol_q, target_pose[:3, 3])
+            # print("dist:", dist)
+            return sol_q, tau_ff, False
+
+        except Exception as e:
+            print(f"ERROR in convergence, plotting debug info.{e}")
+            # sol_q = self.opti.debug.value(self.var_q)   # return original value
+            return None, '', False
+
+    def check_self_collision(self, q, gripper=np.array([0, 0])):
+        pin.forwardKinematics(self.robot.model, self.robot.data, np.concatenate([q, gripper], axis=0))
+        pin.updateGeometryPlacements(self.robot.model, self.robot.data, self.geom_model, self.geometry_data)
+        collision = pin.computeCollisions(self.geom_model, self.geometry_data, False)
+        # print("collision:", collision)
+        return collision
+
+    def get_dist(self, q, xyz):
+        # print("q:", q)
+        pin.forwardKinematics(self.reduced_robot.model, self.reduced_robot.data, np.concatenate([q], axis=0))
+        dist = math.sqrt(pow((xyz[0] - self.reduced_robot.data.oMi[6].translation[0]), 2) + pow((xyz[1] - self.reduced_robot.data.oMi[6].translation[1]), 2) + pow((xyz[2] - self.reduced_robot.data.oMi[6].translation[2]), 2))
+        return dist
+
+    def get_pose(self, q):
+        index = 6
+        pin.forwardKinematics(self.reduced_robot.model, self.reduced_robot.data, np.concatenate([q], axis=0))
+        end_pose = create_transformation_matrix(self.reduced_robot.data.oMi[index].translation[0], self.reduced_robot.data.oMi[index].translation[1], self.reduced_robot.data.oMi[index].translation[2],
+                                                math.atan2(self.reduced_robot.data.oMi[index].rotation[2, 1], self.reduced_robot.data.oMi[index].rotation[2, 2]),
+                                                math.asin(-self.reduced_robot.data.oMi[index].rotation[2, 0]),
+                                                math.atan2(self.reduced_robot.data.oMi[index].rotation[1, 0], self.reduced_robot.data.oMi[index].rotation[0, 0]))
+        end_pose = np.dot(end_pose, self.last_matrix)
+        return matrix_to_xyzrpy(end_pose)
+
+
+class RosOperator:
+    def __init__(self):  
+        rospy.init_node('piper_IK', anonymous=True)  #  /piper_FK/urdf_end_pose  /piper_IK/ctrl_end_pose
+        self.index_name = rospy.get_param('~index_name', default="")
+        self.gripper_position = rospy.get_param('~gripper_xyzrpy', default=[0.245, 0.0, 0.2, 0.0, 0.0, 0.0])
+        self.target_joint_state = rospy.get_param('~target_joint_state', default=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                
+        self.arm_ik = Arm_IK()
+        self.arm_joint_state_publisher = None
+        self.arm_end_pose_publisher = None
+        self.arm_end_pose_orient_publisher = None
+        self.arm_receive_end_pose_publisher = None
+        self.takeover = False
+        self.flag = False
+        self.gripper_value = 0
+        self.base_pose = self.gripper_position   # 末端夹爪到基坐标系的变换
+        
+        # 存储当前关节位置
+        self.current_joint_positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        # 标记是否已获取到当前关节位置
+        self.joint_positions_received = False
+        
+        self.init_ros()
+
+    def calc_pose_incre(self,base_pose, pose_data):
+        begin_matrix = create_transformation_matrix(base_pose[0], base_pose[1], base_pose[2],
+                                                    base_pose[3], base_pose[4], base_pose[5])
+        zero_matrix = create_transformation_matrix(self.gripper_position[0],self.gripper_position[1],self.gripper_position[2],
+                                                   self.gripper_position[3],self.gripper_position[4],self.gripper_position[5],)
+        end_matrix = create_transformation_matrix(pose_data[0], pose_data[1], pose_data[2],
+                                                pose_data[3], pose_data[4], pose_data[5])
+        result_matrix = np.dot(zero_matrix, np.dot(np.linalg.inv(begin_matrix), end_matrix))
+        xyzrpy = matrix_to_xyzrpy(result_matrix)
+        return xyzrpy
+
+    def arm_end_pose_callback(self, msg):
+        self.x = msg.pose.position.x
+        self.y = msg.pose.position.y
+        self.z = msg.pose.position.z
+        (self.roll, self.pitch, self.yaw) = euler_from_quaternion([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
+        
+        RR = [self.x, self.y, self.z, self.roll, self.pitch, self.yaw]
+        RR_ = self.calc_pose_incre(self.base_pose,RR)
+        
+        q = quaternion_from_euler(RR_[3],RR_[4],RR_[5])
+        target = pin.SE3(
+            pin.Quaternion(q[3], q[0], q[1], q[2]),
+            np.array([RR_[0],RR_[1],RR_[2]]),
+        )
+        sol_q, tau_ff, get_result = self.arm_ik.ik_fun(target.homogeneous, msg.pose.orientation.w)
+        
+    def handle_trigger(self,req):
+        rospy.loginfo("Service /trigger has been called")
+        
+        # 在这里执行你想要触发的操作
+        self.takeover = not self.takeover
+        
+        if self.takeover is True:
+            self.base_pose = [self.x, self.y, self.z, self.roll, self.pitch, self.yaw]
+            self.flag = True
+            print("开始遥操作")
+        else:
+            self.flag = False
+            # 检测到复位，机械臂回到初始点位并且记录 右 坐标原点
+            self.base_pose = [self.x, self.y, self.z, self.roll, self.pitch, self.yaw]
+            print("机械臂已复位")
+        
+        success = True  # 假设操作总是成功
+        
+        if success:
+            rospy.loginfo("Triggered successfully")
+            return TriggerResponse(
+                success=True,
+                message="Triggered successfully"
+            )
+        else:
+            rospy.loginfo("Failed to trigger")
+            return TriggerResponse(
+                success=False,
+                message="Failed to trigger"
+            )
+    def init_ros(self):
+        self.arm_joint_state_publisher = rospy.Publisher(f'/joint_states{self.index_name}', JointState, queue_size=10)
+        self.arm_end_pose_publisher = rospy.Publisher(f'/piper_IK{self.index_name}/urdf_end_pose', PoseStamped, queue_size=10)
+        self.arm_end_pose_orient_publisher = rospy.Publisher(f'/piper_IK{self.index_name}/urdf_end_pose_orient', PoseStamped, queue_size=10)
+        self.arm_receive_end_pose_publisher = rospy.Publisher(f'/piper_IK{self.index_name}/receive_end_pose_orient', PoseStamped, queue_size=10)
+        
+        rospy.Subscriber(f'/pika_pose{self.index_name}', PoseStamped, self.arm_end_pose_callback, queue_size=1)
+        rospy.Service(f'/teleop_trigger{self.index_name}',Trigger, self.handle_trigger)        
+        import time 
+        time.sleep(0.5)
+
+def main():
+    ros_operator = RosOperator()
+    rospy.spin()
+
+if __name__ == "__main__":
+    main()
