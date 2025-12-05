@@ -67,6 +67,7 @@ install(PROGRAMS
   scripts/teleop_piper_publish.py
   scripts/transformations.py
   scripts/arm_FIK.py
+  scripts/test_piper_sim.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
