@@ -1,0 +1,81 @@
+/**:
+  ros__parameters:
+    # 机器人描述包名：用于定位 URDF 所在包
+    # 调整方法：如果更换机器人模型/包名，这里改为对应 package 名称
+    robot_description_package: agx_arm_description
+    # URDF 相对路径（相对于 robot_description_package）
+    # 调整方法：切换不同末端工具、不同机器人版本时修改此路径
+    urdf_relative_path: agx_arm_urdf/nero/urdf/nero_with_gripper_description.urdf
+
+    # 机器人结构参数
+    # 锁定不参与 IK 求解的关节名称列表（通常是夹爪或固定关节）
+    # 调整方法：如果 IK 只解 7 轴机械臂，不希望夹爪参与求解，就把夹爪关节放这里
+    locked_joints: ["gripper_base_joint", "gripper_joint1", "gripper_joint2"]
+    # 末端执行器参考父关节：ee_frame 将挂载在该关节下
+    # 调整方法：若末端从 joint7 改到其他关节，修改此项
+    ee_parent_joint: "joint7" 
+    # IK 末端 frame 名称（求解目标 frame）
+    # 调整方法：保持与代码/调试工具中使用的末端 frame 一致
+    ee_frame_name: "ee"
+    # 输出关节顺序（发布到控制器时的关节名顺序）
+    # 调整方法：必须与下游控制器期望顺序一致，顺序错误会导致运动异常
+    output_joint_names: ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7"]
+
+    # 工具坐标系预旋转（RPY，单位 rad）：joint7 -> TCP 的旋转外参
+    # 调整方法：末端姿态总是有固定偏差时调这里；无夹爪/无偏置可设为 [0,0,0]
+    tool_pre_rot_rpy: [0.0, 0.0, 0.0]
+    # 工具平移外参（单位 m）：joint7 -> TCP 的平移偏置
+    # 调整方法：末端位置存在固定偏差时按实测值调整；无夹爪可设为 [0,0,0]
+    tool_translation_xyz: [0.1755, 0.0, -0.0235]
+
+    # 自碰撞检测对（扁平数组 [a,b,c,d] -> (a,b),(c,d)）
+    # 调整方法：按 URDF 碰撞体索引配置；误配会导致误报或漏报
+    collision_pairs_flat: [3, 2, 5, 0, 5, 1, 6, 0, 6, 1]
+    # 是否启用碰撞检查
+    # 调整建议：调试跟手性可先关（false）提升实时性；上机安全测试建议开（true）
+    enable_collision_check: false
+
+    # IK 优化参数
+    # 位置误差权重：越大越“跟位置”，但可能牺牲姿态/平滑
+    # 调整建议：跟手发软可增大；抖动明显可适当减小
+    w_pos: 2.0     # default： 20.0
+    # 姿态误差权重：越大越“跟姿态”，可能增加求解难度与抖动风险
+    # 调整建议：末端朝向不准时增大；若抖动可减小
+    w_ori: 2.0      # default： 2.0
+    # 正则项权重（趋向中性位）：越大越保守，动作幅度更小更稳
+    # 调整建议：若关节总爱跑到极限可增大；若动作受限可减小
+    w_reg: 0.01
+    # 平滑项权重（约束与上一时刻解的差异）
+    # 调整建议：增大更平滑但更迟滞；减小更跟手但可能抖动/跳解
+    # 平滑项过大时会明显不跟手
+    w_smooth: 0.1
+    # IPOPT 最大迭代次数
+    # 调整建议：解不收敛可增大；实时性不足可减小
+    ipopt_max_iter: 50
+    # IPOPT 收敛容差：越小越精确但更耗时，越大越快但误差可能变大
+    # 调整建议：实时优先可适当放宽（如 1e-3），精度优先可收紧（如 1e-5）
+    ipopt_tol: 1.0e-4
+
+    # Meshcat 可视化参数
+    # 是否启用可视化（会增加一定计算与通信开销）
+    enable_visualization: false
+    # 启动时是否自动打开浏览器
+    viewer_open_browser: false
+    # Meshcat 模型名称
+    viewer_model_name: "pinocchio"
+    # 目标 frame 可视化名称（末端目标坐标轴）
+    viewer_target_frame_name: "ee_target"
+    # 可视化坐标轴长度（m）
+    viewer_axis_length: 0.1
+    # 可视化坐标轴线宽
+    viewer_axis_width: 10.0
+
+    # I/O 话题
+    # IK 输入末端目标位姿话题（通常来自 VR/pika pose节点）
+    pose_stamped_topic: "/delta_pose"
+    # 机械臂反馈关节状态话题（用于同步当前状态，提升解的连续性）
+    feedback_joint_topic: "/feedback/joint_states"
+    # pin_joint_status_topic: "/control/move_js"
+    # IK 输出关节命令话题（发给控制器）
+    # 调整建议：与底层控制模式匹配，位置模式常用 /control/joint_states 或 /control/move_j(s)
+    pin_joint_status_topic: "/control/joint_states"
