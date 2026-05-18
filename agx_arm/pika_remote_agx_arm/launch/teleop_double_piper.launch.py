@@ -111,7 +111,7 @@ def generate_launch_description():
     
     # Right hand -> right arm delta pose
     right_pub_delta_pose_node = Node(
-        package="oculus_reader",
+        package="pika_remote_agx_arm",
         executable="pub_delta_pose.py",
         name="right_pub_delta_pose_node",
         output="screen",
