@@ -5,7 +5,7 @@
     robot_description_package: agx_arm_description
     # URDF 相对路径（相对于 robot_description_package）
     # 调整方法：切换不同末端工具、不同机器人版本时修改此路径
-    urdf_relative_path: agx_arm_urdf/nero/urdf/piper_with_gripper_description.urdf
+    urdf_relative_path: agx_arm_urdf/piper/urdf/piper_with_gripper_description.urdf
 
     # 机器人结构参数
     # 锁定不参与 IK 求解的关节名称列表（通常是夹爪或固定关节）
