@@ -319,8 +319,9 @@ class ArmIKPoseNode(Node):
         self.get_logger().info(f"locked_joints(raw)={locked_joints}, locked_joints(dedup)={dedup_locked}")
 
         output_joint_names = list(self.get_parameter("output_joint_names").value)
-        self.output_joint_names = output_joint_names if len(output_joint_names) == self.ik.nq else self.ik.active_joint_names()
-
+        #self.output_joint_names = output_joint_names if len(output_joint_names) == self.ik.nq else self.ik.active_joint_names()
+        self.output_joint_names = output_joint_names
+        
         self.pub_joint = self.create_publisher(JointState, pin_joint_status_topic, 10)
         self.pub_collision = self.create_publisher(Bool, f"{pin_joint_status_topic}_collision", 10)
         self.enable_collision_check = enable_collision_check
