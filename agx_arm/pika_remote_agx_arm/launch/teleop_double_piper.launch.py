@@ -30,7 +30,7 @@ def generate_launch_description():
             "effector_type": "agx_gripper",
             "tcp_offset": "[0.0, 0.0, 0.13, 0.0, 0.0, 0.0]",
             "control": "false",
-            "fast_mode": "false",
+            "fast_mode": "true",
         }.items(),
     )
 
@@ -50,7 +50,7 @@ def generate_launch_description():
             "effector_type": "agx_gripper",
             "tcp_offset": "[0.0, 0.0, 0.13, 0.0, 0.0, 0.0]",
             "control": "false",
-            "fast_mode": "false",
+            "fast_mode": "true",
         }.items(),
     )
 
