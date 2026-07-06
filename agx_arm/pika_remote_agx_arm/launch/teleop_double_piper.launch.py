@@ -10,7 +10,7 @@ def generate_launch_description():
     agx_arm_ctrl_pkg_dir = get_package_share_directory("agx_arm_ctrl")
 
     arm_ik_param_file = os.path.join(
-        pika_remote_agx_arm_pkg_dir, "config", "arm_ik_pose_node.nero.yaml"
+        pika_remote_agx_arm_pkg_dir, "config", "arm_ik_pose_node.piper.yaml"
     )
 
     # 1) ros2 launch agx_arm_ctrl start_single_agx_arm_rviz.launch.py ...
