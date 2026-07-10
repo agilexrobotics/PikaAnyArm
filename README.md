@@ -21,7 +21,8 @@ pika sdk：https://github.com/agilexrobotics/pika_sdk
 
 pika_ros：https://github.com/agilexrobotics/pika_ros
 
-有关更多信息，您可以参考 [Pika 遥操作机械臂手册](https://agilexsupport.yuque.com/staff-hso6mo/peoot3/axi8hh9h9t2sh2su#380914a8) 和 [PIKA使用QA查询](https://agilexsupport.yuque.com/staff-hso6mo/peoot3/ltl2m8a3crra12kg)。
+有关更多信息，您可以参考 [Pika 遥操作机械臂手册](https://agilexsupport.yuque.com/staff-hso6mo/gp5vq8/ey6ocmxoldt9hgn1
+) 和 [PIKA使用QA查询](https://agilexsupport.yuque.com/staff-hso6mo/peoot3/ltl2m8a3crra12kg)。
 
 ## 支持的环境平台
 
