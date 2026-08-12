@@ -79,3 +79,6 @@
     # IK 输出关节命令话题（发给控制器）
     # 调整建议：与底层控制模式匹配，位置模式常用 /control/joint_states 或 /control/move_j(s)
     pin_joint_status_topic: "/control/joint_states"
+    # IK 解经 FK 得到的末端位姿话题（PoseStamped，frame_id=base_link）
+    # 用途：与 pose_stamped_topic 的目标位姿对比，评估 IK 跟随误差；置空则不发布
+    fk_pose_topic: "/ik_fk_pose"

@@ -30,6 +30,24 @@ def pose_to_mat(pose: Pose) -> np.ndarray:
     return mat
 
 
+def mat_to_xyzrpy(mat: np.ndarray) -> List[float]:
+    roll, pitch, yaw = Rotation.from_matrix(mat[:3, :3]).as_euler("xyz")
+    return [float(mat[0, 3]), float(mat[1, 3]), float(mat[2, 3]), float(roll), float(pitch), float(yaw)]
+
+
+def mat_to_pose(mat: np.ndarray) -> Pose:
+    quat = Rotation.from_matrix(mat[:3, :3]).as_quat()  # x y z w
+    pose = Pose()
+    pose.position.x = float(mat[0, 3])
+    pose.position.y = float(mat[1, 3])
+    pose.position.z = float(mat[2, 3])
+    pose.orientation.x = float(quat[0])
+    pose.orientation.y = float(quat[1])
+    pose.orientation.z = float(quat[2])
+    pose.orientation.w = float(quat[3])
+    return pose
+
+
 class ArmIK:
     def __init__(
         self,
@@ -185,6 +203,14 @@ class ArmIK:
         self.display_solution(sol_q)
         return sol_q
 
+    def get_pose_mat(self, q: np.ndarray) -> np.ndarray:
+        q = np.array(q, dtype=float).reshape(-1)
+        pin.framesForwardKinematics(self.reduced_robot.model, self.reduced_robot.data, q)
+        return np.array(self.reduced_robot.data.oMf[self.ee_id].homogeneous)
+
+    def get_pose(self, q: np.ndarray) -> List[float]:
+        return mat_to_xyzrpy(self.get_pose_mat(q))
+
     def check_self_collision(self, q: np.ndarray) -> bool:
         pin.forwardKinematics(self.reduced_robot.model, self.reduced_robot.data, q)
         pin.updateGeometryPlacements(self.reduced_robot.model, self.reduced_robot.data, self.geom_model, self.geometry_data)
@@ -258,6 +284,7 @@ class ArmIKPoseNode(Node):
         self.declare_parameter("pose_stamped_topic", "")
         self.declare_parameter("feedback_joint_topic", "")
         self.declare_parameter("pin_joint_status_topic", "pin_joint_status")
+        self.declare_parameter("fk_pose_topic", "ik_fk_pose")
         # NOTE: Empty list default is inferred as BYTE_ARRAY in rclpy.
         # Use string array default to keep YAML STRING_ARRAY override compatible.
         self.declare_parameter("output_joint_names", [""])
@@ -290,6 +317,7 @@ class ArmIKPoseNode(Node):
         pose_stamped_topic = str(self.get_parameter("pose_stamped_topic").value).strip()
         feedback_joint_topic = self.get_parameter("feedback_joint_topic").value
         pin_joint_status_topic = self.get_parameter("pin_joint_status_topic").value
+        fk_pose_topic = str(self.get_parameter("fk_pose_topic").value).strip()
 
         package_path = get_package_share_directory(package_name)
         urdf_path = os.path.join(package_path, urdf_rel)
@@ -324,6 +352,7 @@ class ArmIKPoseNode(Node):
         
         self.pub_joint = self.create_publisher(JointState, pin_joint_status_topic, 10)
         self.pub_collision = self.create_publisher(Bool, f"{pin_joint_status_topic}_collision", 10)
+        self.pub_fk_pose = self.create_publisher(PoseStamped, fk_pose_topic, 10) if fk_pose_topic else None
         self.enable_collision_check = enable_collision_check
 
         if pose_stamped_topic:
@@ -335,7 +364,7 @@ class ArmIKPoseNode(Node):
 
         self.get_logger().info(
             f"IK node ready. URDF={urdf_path}, input=({pose_stamped_topic}), "
-            f"output={pin_joint_status_topic}, nq={self.ik.nq}"
+            f"output={pin_joint_status_topic}, fk_pose={fk_pose_topic}, nq={self.ik.nq}"
         )
 
     def feedback_joint_callback(self, msg: JointState) -> None:
@@ -353,6 +382,13 @@ class ArmIKPoseNode(Node):
             joint_msg.name = self.output_joint_names
             joint_msg.position = sol_q.tolist()
             self.pub_joint.publish(joint_msg)
+
+            if self.pub_fk_pose is not None:
+                fk_msg = PoseStamped()
+                fk_msg.header.stamp = stamp
+                fk_msg.header.frame_id = "base_link"
+                fk_msg.pose = mat_to_pose(self.ik.get_pose_mat(sol_q))
+                self.pub_fk_pose.publish(fk_msg)
 
             if self.enable_collision_check:
                 col_msg = Bool()

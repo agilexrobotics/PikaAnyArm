@@ -66,6 +66,7 @@ def generate_launch_description():
                 "pose_stamped_topic": "/left_delta_pose",
                 "feedback_joint_topic": "/left_arm/feedback/joint_states",
                 "pin_joint_status_topic": "/left_arm/control/joint_states",
+                "fk_pose_topic": "/left_arm/ik_fk_pose",
             },
         ],
     )
@@ -81,6 +82,7 @@ def generate_launch_description():
                 "pose_stamped_topic": "/right_delta_pose",
                 "feedback_joint_topic": "/right_arm/feedback/joint_states",
                 "pin_joint_status_topic": "/right_arm/control/joint_states",
+                "fk_pose_topic": "/right_arm/ik_fk_pose",
             },
         ],
     )
