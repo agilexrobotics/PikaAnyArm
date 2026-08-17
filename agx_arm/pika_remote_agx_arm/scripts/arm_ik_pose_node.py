@@ -95,6 +95,7 @@ class ArmIK:
                 pin.FrameType.OP_FRAME,
             )
         )
+        self.reduced_robot.data = self.reduced_robot.model.createData()
 
         self.geom_model = self.reduced_robot.collision_model
         for i in range(0, len(collision_pairs_flat), 2):
