@@ -71,7 +71,7 @@ class RosOperator(Node):
         self.handle_pose_yaw = float(self.get_parameter("handle_pose_yaw").value)
 
         self.pub_delta_pose = self.create_publisher(PoseStamped, delta_pose_topic, 10)
-        self.pub_move_j = self.create_publisher(JointState, control_joint_topic, 10)
+        # self.pub_move_j = self.create_publisher(JointState, control_joint_topic, 10)
         
         # Cached pose matrices
         self.handle_matrix = None
@@ -153,12 +153,12 @@ class RosOperator(Node):
             return
         
         # gripper coltrol
-        gripper_msg = JointState()
-        gripper_msg.header = Header()
-        gripper_msg.header.stamp = self.get_clock().now().to_msg()
-        gripper_msg.name = [self.gripper_joint_name]
-        gripper_msg.position = list(self.gripper_position)
-        self.pub_move_j.publish(gripper_msg)
+        # gripper_msg = JointState()
+        # gripper_msg.header = Header()
+        # gripper_msg.header.stamp = self.get_clock().now().to_msg()
+        # gripper_msg.name = [self.gripper_joint_name]
+        # gripper_msg.position = list(self.gripper_position)
+        # self.pub_move_j.publish(gripper_msg)
 
         result_matrix = self._baseline_matrix @ self.handle_matrix
         xyz, quat = mat2xyzquat(result_matrix)
