@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 import os
+_THREAD_ENV_KEYS = (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+)
+for key in _THREAD_ENV_KEYS:
+        os.environ.setdefault(key,"1")
 from typing import List
-
 import casadi
 import numpy as np
 import pinocchio as pin
