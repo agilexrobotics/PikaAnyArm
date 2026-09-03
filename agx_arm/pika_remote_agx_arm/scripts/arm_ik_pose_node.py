@@ -264,6 +264,7 @@ class ArmIK:
 class ArmIKPoseNode(Node):
     def __init__(self):
         super().__init__("arm_ik_pose_node")
+        self.gripper_position = []
 
         self.declare_parameter("robot_description_package", "agx_arm_description")
         self.declare_parameter("urdf_relative_path", "urdf/nero.urdf")
@@ -292,6 +293,7 @@ class ArmIKPoseNode(Node):
         self.declare_parameter("feedback_joint_topic", "")
         self.declare_parameter("pin_joint_status_topic", "pin_joint_status")
         self.declare_parameter("fk_pose_topic", "ik_fk_pose")
+        self.declare_parameter("gripper_joint_state_topic", "/gripper/joint_state")
         # NOTE: Empty list default is inferred as BYTE_ARRAY in rclpy.
         # Use string array default to keep YAML STRING_ARRAY override compatible.
         self.declare_parameter("output_joint_names", [""])
@@ -325,6 +327,7 @@ class ArmIKPoseNode(Node):
         feedback_joint_topic = self.get_parameter("feedback_joint_topic").value
         pin_joint_status_topic = self.get_parameter("pin_joint_status_topic").value
         fk_pose_topic = str(self.get_parameter("fk_pose_topic").value).strip()
+        gripper_joint_state_topic = str(self.get_parameter("gripper_joint_state_topic").value).strip()
 
         package_path = get_package_share_directory(package_name)
         urdf_path = os.path.join(package_path, urdf_rel)
@@ -366,6 +369,9 @@ class ArmIKPoseNode(Node):
             self.create_subscription(PoseStamped, pose_stamped_topic, self.pose_stamped_callback, 10)
         if feedback_joint_topic:
             self.create_subscription(JointState, feedback_joint_topic, self.feedback_joint_callback, 10)
+        if gripper_joint_state_topic:  
+            self.create_subscription(JointState, gripper_joint_state_topic, self.gripper_joint_state_callback, 1)
+
         if not pose_stamped_topic:
             raise ValueError("pose_stamped_topic cannot be empty.")
 
@@ -378,6 +384,13 @@ class ArmIKPoseNode(Node):
         if len(msg.position) >= self.ik.nq:
             self.ik.sync_state(list(msg.position[: self.ik.nq]))
 
+    def gripper_joint_state_callback(self, msg: JointState) -> None:
+        if not msg.position:
+            self.get_logger().warning("Received empty gripper position")
+            return
+
+        self.gripper_position = list(msg.position)
+
     def pose_stamped_callback(self, msg: PoseStamped) -> None:
         self._solve_and_publish(pose_to_mat(msg.pose), stamp=msg.header.stamp)
 
@@ -386,8 +399,13 @@ class ArmIKPoseNode(Node):
             sol_q = self.ik.solve(target_pose)
             joint_msg = JointState()
             joint_msg.header.stamp = stamp
-            joint_msg.name = self.output_joint_names
+            joint_msg.name = list(self.output_joint_names)
             joint_msg.position = sol_q.tolist()
+
+            if self.gripper_position:
+                joint_msg.name.append("gripper")
+                joint_msg.position.append(self.gripper_position[0])
+
             self.pub_joint.publish(joint_msg)
 
             if self.pub_fk_pose is not None:
