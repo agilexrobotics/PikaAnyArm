@@ -10,7 +10,7 @@
     # 机器人结构参数
     # 锁定不参与 IK 求解的关节名称列表（通常是夹爪或固定关节）
     # 调整方法：如果 IK 只解 7 轴机械臂，不希望夹爪参与求解，就把夹爪关节放这里
-    locked_joints: ["gripper_base_joint", "gripper_joint1", "gripper_joint2"]
+    locked_joints: ["gripper_base_joint", "gripper", "gripper_joint1", "gripper_joint2"]
     # 末端执行器参考父关节：ee_frame 将挂载在该关节下
     # 调整方法：若末端从 joint6 改到其他关节，修改此项
     ee_parent_joint: "joint6" 
